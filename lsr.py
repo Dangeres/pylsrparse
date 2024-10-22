@@ -4,35 +4,15 @@ import aiohttp
 import json
 from bs4 import BeautifulSoup
 
+from notify.notify import Notify
+from notify.print import Print
+from notify.telegram import Telegram
 
-FILELOG = 'result.txt'
+
 PATH_CLOSES = './closes'
-DEBUG = False
+FILE_LOG = 'result.txt'
 SOLDED_PRINT = True
-
-
-service_url = os.getenv('SERVICE_URL').strip('/')
-service_token = os.getenv('SERVICE_TOKEN')
-channel_id = int(os.getenv('CHANNEL_ID'))
-private_id = int(os.getenv('PRIVATE_ID'))
-
-
-async def send_message(client: aiohttp.ClientSession, text: str, channel: int) -> int:
-    while True:
-        async with client.post(
-            url=f'{service_url}/v1/message/random/create', 
-            json={
-                "channel_id": channel,
-                "text": text,
-            },
-            headers={
-                'Token': service_token,
-            }
-        ) as resp:
-            print(resp.status)
-
-            if resp.status == 200:
-                break
+DEBUG = False
 
 
 def booler_rus(bool: bool) -> str:
@@ -43,12 +23,36 @@ def booler_rus_tag(bool: bool) -> str:
     return f'<i>{booler_rus(bool)}</i>'
 
 
+async def send_message(notis: list[Notify], *args, **kwargs):
+    for notify in notis:
+        result = await notify.message(*args, **kwargs)
+
+        if result:
+            return
+        else:
+            print(f'Cant send data uses {notify.__class__.__name__}')
+
+
 async def main():
+    service_url = os.getenv('SERVICE_URL').strip('/') if os.getenv('SERVICE_URL') else None
+    service_token = os.getenv('SERVICE_TOKEN') if os.getenv('SERVICE_TOKEN') else None
+    channel_id = int(os.getenv('CHANNEL_ID')) if os.getenv('CHANNEL_ID') else None
+    private_id = int(os.getenv('PRIVATE_ID')) if os.getenv('PRIVATE_ID') else None
+
     closes_old = {}
 
     client = aiohttp.ClientSession(
         connector=aiohttp.TCPConnector(verify_ssl=False),
     )
+
+    notis = [
+        Telegram(
+            client=client,
+            service_url=service_url,
+            service_token=service_token,
+        ),
+        Print(),
+    ]
 
     for f in os.listdir(PATH_CLOSES):
         with open(f'{PATH_CLOSES}/{f}', 'r+') as f_:
@@ -61,6 +65,7 @@ async def main():
                 closes_old[f.split('.')[0]] = data
 
     await send_message(
+        notis=notis,
         client=client,
         text="старт парсера кладовок",
         channel=private_id,
@@ -138,6 +143,7 @@ async def main():
                 )
             ):
                 await send_message(
+                    notis=notis,
                     client=client,
                     text=(
                         f"Старые данные:\nв продаже:{booler_rus_tag(not closes_old[name].get('sold', False))}\nназвание: {closes_old[name]['name']}\nразмер: {closes_old[name]['size']}\nцена: {closes_old[name]['price']}\n\nНовые данные:\nв продаже:{booler_rus_tag(True)}\nназвание: {name}\nразмер: {size}\nцена: {price}"
@@ -162,6 +168,7 @@ async def main():
                 del closes_old[name]
             else:
                 await send_message(
+                    notis=notis,
                     client=client,
                     text=(
                         f"Новая кладовка с данными:\nв продаже: {booler_rus_tag(True)}\nназвание: {name}\nразмер: {size}\nцена: {price}"
@@ -185,7 +192,7 @@ async def main():
 
         page += 1
 
-    with open(file=FILELOG, mode='+w') as file_:
+    with open(file=FILE_LOG, mode='+w') as file_:
         file_.write('\n'.join(data))
 
     for clos in closes_old:
@@ -195,6 +202,7 @@ async def main():
             print(f'Была продана кладовка {clos}')
 
             await send_message(
+                notis=notis,
                 client=client,
                 text=(
                     f"Была продана кладовка с данными:\nназвание: {closes_old[clos]['name']}\nразмер: {closes_old[clos]['size']}\nцена: {closes_old[clos]['price']}"
@@ -209,6 +217,7 @@ async def main():
             )
 
     await send_message(
+        notis=notis,
         client=client,
         text="конец парсера кладовок",
         channel=private_id,
