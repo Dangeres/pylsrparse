@@ -17,23 +17,22 @@ channel_id = int(os.getenv('CHANNEL_ID'))
 private_id = int(os.getenv('PRIVATE_ID'))
 
 
-async def send_message(text: str, channel: int) -> int:
+async def send_message(client: aiohttp.ClientSession, text: str, channel: int) -> int:
     while True:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url=f'{service_url}/v1/message/random/create', 
-                json={
-                    "channel_id": channel,
-                    "text": text,
-                },
-                headers={
-                    'Token': service_token,
-                }
-            ) as resp:
-                print(resp.status)
+        async with client.post(
+            url=f'{service_url}/v1/message/random/create', 
+            json={
+                "channel_id": channel,
+                "text": text,
+            },
+            headers={
+                'Token': service_token,
+            }
+        ) as resp:
+            print(resp.status)
 
-                if resp.status == 200:
-                    break
+            if resp.status == 200:
+                break
 
 
 def booler_rus(bool: bool) -> str:
@@ -47,6 +46,10 @@ def booler_rus_tag(bool: bool) -> str:
 async def main():
     closes_old = {}
 
+    client = aiohttp.ClientSession(
+        connector=aiohttp.TCPConnector(verify_ssl=False),
+    )
+
     for f in os.listdir(PATH_CLOSES):
         with open(f'{PATH_CLOSES}/{f}', 'r+') as f_:
             data = json.load(f_)
@@ -58,12 +61,9 @@ async def main():
                 closes_old[f.split('.')[0]] = data
 
     await send_message(
+        client=client,
         text="старт парсера кладовок",
         channel=private_id,
-    )
-
-    client = aiohttp.ClientSession(
-        connector=aiohttp.TCPConnector(verify_ssl=False),
     )
 
     data = []
@@ -138,6 +138,7 @@ async def main():
                 )
             ):
                 await send_message(
+                    client=client,
                     text=(
                         f"Старые данные:\nв продаже:{booler_rus_tag(not closes_old[name].get('sold', False))}\nназвание: {closes_old[name]['name']}\nразмер: {closes_old[name]['size']}\nцена: {closes_old[name]['price']}\n\nНовые данные:\nв продаже:{booler_rus_tag(True)}\nназвание: {name}\nразмер: {size}\nцена: {price}"
                     ),
@@ -161,6 +162,7 @@ async def main():
                 del closes_old[name]
             else:
                 await send_message(
+                    client=client,
                     text=(
                         f"Новая кладовка с данными:\nв продаже: {booler_rus_tag(True)}\nназвание: {name}\nразмер: {size}\nцена: {price}"
                     ),
@@ -193,6 +195,7 @@ async def main():
             print(f'Была продана кладовка {clos}')
 
             await send_message(
+                client=client,
                 text=(
                     f"Была продана кладовка с данными:\nназвание: {closes_old[clos]['name']}\nразмер: {closes_old[clos]['size']}\nцена: {closes_old[clos]['price']}"
                 ),
@@ -206,9 +209,12 @@ async def main():
             )
 
     await send_message(
+        client=client,
         text="конец парсера кладовок",
         channel=private_id,
     )
+
+    await client.close()
 
 
 if __name__ == '__main__':
