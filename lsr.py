@@ -36,6 +36,7 @@ async def send_message(notis: list[Notify], *args, **kwargs):
 async def main():
     service_url = os.getenv('SERVICE_URL').strip('/') if os.getenv('SERVICE_URL') else None
     service_token = os.getenv('SERVICE_TOKEN') if os.getenv('SERVICE_TOKEN') else None
+    service_src = os.getenv('SERVICE_SRC') if os.getenv('SERVICE_SRC') else None
     channel_id = int(os.getenv('CHANNEL_ID')) if os.getenv('CHANNEL_ID') else None
     private_id = int(os.getenv('PRIVATE_ID')) if os.getenv('PRIVATE_ID') else None
 
@@ -49,6 +50,7 @@ async def main():
         Telegram(
             client=client,
             service_url=service_url,
+            service_src=service_src,
             service_token=service_token,
         ),
         Print(),
